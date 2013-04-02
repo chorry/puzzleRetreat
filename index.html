@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>coffee.js test</title>
+    <meta charset=utf-8>
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
+    <style>
+        body {
+            max-width: 674px;
+            margin: 4ex auto;
+            font-family: 'Open Sans', sans-serif;
+        }
+
+        table {
+            padding: 0px;
+            margin: 0px;
+        }
+
+        tr {
+            min-height: 64px;
+        }
+        td {
+            border: 1px solid black;
+            min-height: 64px;
+            width: 64px;
+            height: 64px;
+        }
+
+        .block {
+            min-width: 64px;
+            max-width: 64px;
+            min-height: 64px;
+            max-height: 64px;
+            position: relative;
+            -webkit-transition:
+                /* sliding animation. */
+                left 600ms,
+                top 600ms;
+            transition:
+                /* sliding animation. */
+                left 600ms,
+                top 600ms;
+        }
+
+        .blockContainer {
+            background: #a52a2a;
+            min-width: 64px;
+            max-width: 64px;
+            min-height: 64px;
+            max-height: 64px;
+        }
+
+
+        .border {
+            background: hsl(217, 38%, 29%);
+            border: solid 1px hsl(100, 95%, 95%);
+        }
+
+        .ice {
+            background: hsl(188, 100%, 90%);
+            border: solid 1px hsl(172, 52%, 74%);
+        }
+        .hole {
+            background: hsl(0, 0%, 65%);
+            border: solid 1px hsl(0, 0%, 0%);
+        }
+        .stuck {
+            background: hsl(120, 100%, 45%);
+            border: solid 1px hsl(120, 100%, 30%);
+        }
+
+    </style>
+</head>
+<body>
+<h1>coffee</h1>
+
+
+<div id='unknown'>
+    <div id='map'></div>
+    <select id='level'></select>
+    <button id='reset'>Reset</button>
+</div>
+
+<canvas id="canvas" width="578" height="600"></canvas>
+<p>Controls: none</p>
+<div id="log" style="position: absolute; left:0; top: 0;"></div>
+<script src='ice.js'></script>
+
+</body>
+</html>
