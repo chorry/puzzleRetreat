@@ -7,11 +7,11 @@
 levels = [
   #test level
   [
-    "01i00"
-    "01110"
-    "01010",
-    "01110",
-    "000x0",
+    "2i000"
+    "0000000"
+    "000120000",
+    "0111000",
+    "00000",
   ],
   #test level
   [
@@ -67,10 +67,13 @@ hashCode = (string) ->
 
 
 BLOCK_SIZE=64
-BLOCK_SPEED = 16
-TICK_SPEED = 100
-OBJECT_TTL = 18
+BLOCK_SPEED = 30
+TICK_SPEED = 10
+OBJECT_TTL = 4
 currentLevel = {}
+
+BLOCK_TYPE_HOLE = '0'
+BLOCK_TYPE_ICE  = 'i'
 
 canvasElements = [] #keeps all existant elements on canvas
 
@@ -137,6 +140,11 @@ redrawCanvas = ->
       element.drawOnCtx(ctx, element.canvasX, element.canvasY, element.width, element.height)
       ctx.strokeStyle = "red";
       ctx.strokeRect(element.canvasX, element.canvasY, element.width, element.height);
+      #debug - draw block ids
+      if element.blockType in ['ice','two','one']
+        ctx.fillStyle = "black"
+        ctx.font = "bold 16px Arial";
+        ctx.fillText(element.x + ":" + element.y, element.canvasX + 20, element.canvasY + 30);
     canvas.valid = true
 
 class Map
@@ -206,30 +214,31 @@ class Map
 
   isCellAvailableForMoveOver: (y, x)->
     if (typeof currentLevel[x] == 'object')
-      if currentLevel[x][y] in ['0','i']
+      console.debug("check cell #{x} #{y}=" + currentLevel[x][y])
+      if currentLevel[x][y] in ['0','ice']
         return true
     return false
 
   updateBlockPositionOnMap: (blockObj) ->
 
-#    console.debug('curValue ['+blockObj.x+'/'+blockObj.canvasX/BLOCK_SIZE+':'+blockObj.y+'/'+blockObj.canvasY/BLOCK_SIZE+']= ' + currentLevel[blockObj.x][blockObj.y])
+    console.log('X:' +  (blockObj.canvasX/BLOCK_SIZE) + ":" + blockObj.x , 'Y:' +  (blockObj.canvasY/BLOCK_SIZE) + ":" + blockObj.y)
 
     if blockObj.canvasX/BLOCK_SIZE > blockObj.x || (blockObj.canvasX/BLOCK_SIZE) <= (blockObj.x - 1)
       console.log('MATCH:' + blockObj.x + "= " + ~~(blockObj.canvasX/BLOCK_SIZE))
       blockObj.x = ~~(blockObj.canvasX/BLOCK_SIZE)
 
 
-    console.log('X:' +  (blockObj.canvasX/BLOCK_SIZE) + ":" + blockObj.x)
-    console.log('Y:' +  (blockObj.canvasY/BLOCK_SIZE) + ":" + blockObj.y)
-
-    if ~~(blockObj.canvasY/BLOCK_SIZE) != blockObj.y && ~~(blockObj.canvasY/BLOCK_SIZE) > blockObj.y || ~~(blockObj.canvasY/BLOCK_SIZE) < (blockObj.y-1)
+    if ~~(blockObj.canvasY/BLOCK_SIZE) > blockObj.y || (blockObj.canvasY/BLOCK_SIZE) == (blockObj.y - 1)
+      console.log('MATCH Y:' + blockObj.y + "= " + ~~(blockObj.canvasY/BLOCK_SIZE)) + "::::" + blockObj.y
       blockObj.y = ~~(blockObj.canvasY/BLOCK_SIZE)
-      console.log('MATCH Y')
 
+
+
+    console.debug(currentLevel[blockObj.x][blockObj.y], ":" + blockObj.x + ":" + blockObj.y)
     if currentLevel[blockObj.x][blockObj.y] == '0'
-      console.log('stop move for ' + blockObj.id)
-      blockObj.movable = false
-      currentLevel[blockObj.x][blockObj.y] = '1'
+      console.log('========== stop move for  #{blockObj.blockType} #' + blockObj.id + "")
+      #blockObj.movable = false
+      currentLevel[blockObj.x][blockObj.y] = blockObj.blockType
       return true
 
 
@@ -263,6 +272,7 @@ class MovableBlock
     #TODO: check outbounds
     if (@canvasX+@canvasY != a)
       canvas.valid = false
+
 
     return false
 
@@ -298,24 +308,28 @@ class GenericBlock extends DrawableBlock
     @height = BLOCK_SIZE
 
   modifyCanvasX: (modifier) ->
+
+    #get direction, L or R
+    moveDirection = if modifier < 0 then -1 else 1
+
     if (@nextDirectionModifier != '' )
       console.log("nextDir is #{@nextDirectionModifier}")
-      if @direction == @direction_old
+      if @direction == @direction_old && currentLevel[@x+moveDirection][@y] == BLOCK_TYPE_HOLE
         modifier = @nextDirectionModifier
       else
         @nextDirectionModifier = ''
 
-    console.log("using mod #{modifier}")
+    console.log("using mod #{modifier}  from #{@x}:#{@y}")
     @canvasX += modifier
 
     boundLeft  = @width*(  ~~(@canvasX/@width) )
     boundRight = @width*(  ~~(@canvasX/@width) + 1)
 
-    if (@canvasX + modifier) < boundLeft
+    if (@canvasX + modifier) < boundLeft && currentLevel[@x+moveDirection][@y] == BLOCK_TYPE_HOLE
       console.log('left bound')
       @nextDirectionModifier = boundLeft - @canvasX
 
-    if (@canvasX + modifier) > boundRight
+    if (@canvasX + modifier) > boundRight && currentLevel[@x+moveDirection][@y] == BLOCK_TYPE_HOLE
       console.log('right bound')
       @nextDirectionModifier = boundRight - @canvasX
       
@@ -332,7 +346,7 @@ class GenericBlock extends DrawableBlock
       else
         @nextDirectionModifier = ''
         
-    console.log("using mod #{modifier}")
+    console.log("using mod #{modifier}  from #{@x}:#{@y}")
     @canvasY += modifier
 
     boundTop  = @height*(  ~~(@canvasY/@height) )
