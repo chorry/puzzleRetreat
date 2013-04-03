@@ -10,7 +10,7 @@ levels = [
   [
     "120000000"
     "12i000000"
-    "120000000"
+    "120000r00"
     "00i020u00",
     "001i00000",
     "100110000",
@@ -25,7 +25,7 @@ levels = [
   [
    "x112x",
    "2000x",
-   "x000s",
+   "x0001",
    "10001"
   ],
   #Morning #2
@@ -78,12 +78,14 @@ hashCode = (string) ->
 
 BLOCK_SIZE=64
 BLOCK_SPEED = 16
-TICK_SPEED = 10
+TICK_SPEED = 100
 OBJECT_TTL = 30
 currentLevel = {}
 
 BLOCK_TYPE_HOLE = '0'
 BLOCK_TYPE_ICE  = 'i'
+BLOCK_TYPE_STOPPER = 's'
+BLOCK_TYPE_FIRE = 'f'
 BLOCK_TYPE_DIRECTION_UP = 'u'
 BLOCK_TYPE_DIRECTION_LEFT = 'l'
 BLOCK_TYPE_DIRECTION_DOWN = 'd'
@@ -188,6 +190,8 @@ class Map
 
   tick: =>
     @updateListeners()
+    if @checkIfMapIsComplete()
+      alert('Congratulations!')
     redrawCanvas()
     setTimeout @tick, TICK_SPEED
 
@@ -212,8 +216,7 @@ class Map
             blockCount = 2
             item = new BlockContainer(blockCount, blockType)
           when 's'
-            blockType = 'stopper'
-            item = new BlockContainer(blockCount, blockType)
+            item = new BlockContainer(blockCount, BLOCK_TYPE_STOPPER)
           when 'u'
             item = new DirectionBlock(blockCount, BLOCK_TYPE_DIRECTION_UP)
           when 'd'
@@ -232,9 +235,16 @@ class Map
 
         canvasElements.push(item)
 
+  checkIfMapIsComplete: ->
+    for k1,v1 of currentLevel
+      for k2,v2 of v1
+        if (typeof v2 == 'string' && v2 == '0')
+          return false
+    return true
+
   isCellAvailableForMoveOver: (y, x)->
     if (typeof currentLevel[x] == 'object')
-      if currentLevel[x][y] in [BLOCK_TYPE_HOLE, BLOCK_TYPE_ICE ]
+      if currentLevel[x][y] in [BLOCK_TYPE_HOLE, BLOCK_TYPE_ICE, BLOCK_TYPE_DIRECTION_DOWN, BLOCK_TYPE_DIRECTION_LEFT, BLOCK_TYPE_DIRECTION_RIGHT, BLOCK_TYPE_DIRECTION_UP ]
         return true
     return false
 
@@ -254,8 +264,13 @@ class Map
           blockObj.movable = false
           currentLevel[blockObj.x][blockObj.y] = blockObj.blockType
         when BLOCK_TYPE_DIRECTION_UP
-          console.log('changing direction to up')
-          blockObj.direction = 'up'
+          blockObj.setDirection('up')
+        when BLOCK_TYPE_DIRECTION_DOWN
+          blockObj.setDirection('down')
+        when BLOCK_TYPE_DIRECTION_LEFT
+          blockObj.setDirection('left')
+        when BLOCK_TYPE_DIRECTION_RIGHT
+          blockObj.setDirection('right')
 
     return true
 
@@ -269,9 +284,26 @@ class DrawableBlock
 
 #MIXIN CLASS
 class MovableBlock
-  moveBlockToDirection: (direction = @direction) ->
+  enableBlock: () ->
+    @state = 'active'
+    @doEvent = 'moveBlock'
+    map.addListener(this)
+
+  setDirection: (@direction) ->
+    @direction = direction
+    if @state != 'active'
+      @enableBlock()
+
+  getDirection: ->
+    @direction
+
+  updateBlockPosition: ->
+    return
+
+
+  moveBlock: ->
     a = @canvasX+@canvasY
-    switch direction
+    switch @direction
       when 'left'
         if map.isCellAvailableForMoveOver(@y, @x-1)
           @modifyCanvasX(-BLOCK_SPEED)
@@ -284,25 +316,19 @@ class MovableBlock
       when 'down'
         if map.isCellAvailableForMoveOver(@y+1, @x)
           @modifyCanvasY(BLOCK_SPEED)
+      else
+        throw {message:'no direction were set'}
 
     #TODO: check outbounds
     if (@canvasX+@canvasY != a)
       canvas.valid = false
-
-
     return false
 
   checkBlockStatus: () ->
-    if @direction == false
+    if @direction is false
       @state = false
       map.deleteListener(this)
 
-  setDirection: (direction) ->
-    if @direction == false && direction != false
-      @direction = direction
-      @state = 'active'
-      @doEvent = 'moveBlockToDirection'
-      map.addListener(this)
 
   setMoveTo: (@moveToX,@moveToY) ->
   @
@@ -392,10 +418,10 @@ class IceBlock extends GenericBlock
     @blockColor = '#000077'
     @transparency = 0.3
 
-class GrassBlock extends GenericBlock
+class StopperBlock extends GenericBlock
   constructor: () ->
-    super ('grass')
-    @blockColor = '#007700'
+    super (BLOCK_TYPE_STOPPER)
+    @blockColor = '#115090'
 
 class AbstractBlockContainer extends DrawableBlock
   constructor: ->
