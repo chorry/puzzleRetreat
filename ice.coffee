@@ -1,3 +1,4 @@
+#TODO: undo state. better opacity
 #Description:
 #i - ice block
 #f - fire block
@@ -9,11 +10,11 @@ levels = [
   #test level
   [
     "120000000"
-    "12i000000"
-    "120000r00"
-    "00i020u00",
+    "12i0i0000"
+    "1200fird0"
+    "00i060u00",
     "001i00000",
-    "100110000",
+    "10011u0l0",
   ],
   #test level
   [
@@ -79,19 +80,23 @@ hashCode = (string) ->
 BLOCK_SIZE=64
 BLOCK_SPEED = 16
 TICK_SPEED = 100
-OBJECT_TTL = 30
+OBJECT_TTL = 3000
 currentLevel = {}
 
 BLOCK_TYPE_HOLE = '0'
 BLOCK_TYPE_ICE  = 'i'
 BLOCK_TYPE_STOPPER = 's'
 BLOCK_TYPE_FIRE = 'f'
+BLOCK_TYPE_CONTAINER = 'c' #not used as descriptor on map
+BLOCK_TYPE_ICE_CLASSNAME = 'IceBlock'
+BLOCK_TYPE_STOPPER_CLASSNAME = 'StopperBlock'
+BLOCK_TYPE_FIRE_CLASSNAME = 'FireBlock'
 BLOCK_TYPE_DIRECTION_UP = 'u'
 BLOCK_TYPE_DIRECTION_LEFT = 'l'
 BLOCK_TYPE_DIRECTION_DOWN = 'd'
 BLOCK_TYPE_DIRECTION_RIGHT = 'r'
 
-canvasElements = [] #keeps all existant elements on canvas
+canvasElements = {} #keeps all existant elements on canvas
 
 canvas = document.getElementById('canvas')
 canvas.valid = false
@@ -104,12 +109,13 @@ canvasDown = (e) ->
   canvas.dragX = x
   canvas.dragY = y
 
-  for element in canvasElements
-    if (
-      y > element.canvasY && y < element.canvasY + element.height &&
-      x > element.canvasX && x < element.canvasX + element.width
-      )
-      activeElement = element
+  for id, element of canvasElements
+    if (typeof element is 'object')
+      if (
+        y > element.canvasY && y < element.canvasY + element.height &&
+        x > element.canvasX && x < element.canvasX + element.width
+        )
+        activeElement = element
 
 #LOL
 uniqueObjectId = 0
@@ -125,12 +131,12 @@ canvasUp = (e) ->
   y = e.pageY - canvas.offsetTop
   if dragGetDirection(canvas.dragX, canvas.dragY, x, y) != false
     neighbCellCoords =  Helper.getNeighborCellByDirection(dragGetDirection(canvas.dragX, canvas.dragY, x, y) , ~~(@dragX/BLOCK_SIZE), ~~(@dragY/BLOCK_SIZE))
+
     if map.isCellAvailableForMoveOver(neighbCellCoords[1],neighbCellCoords[0]) &&
     activeElement.blockCount > 0
-        console.log('DO move to', ~~(y/BLOCK_SIZE),~~(x/BLOCK_SIZE))
-        activeElement.spawnBlocks()
-        for blockElem in activeElement.blockList
-          blockElem.setDirection( dragGetDirection(canvas.dragX, canvas.dragY, x, y) )
+      activeElement.spawnBlocks()
+      for blockElem in activeElement.blockList
+        blockElem.setDirection( dragGetDirection(canvas.dragX, canvas.dragY, x, y) )
 
 dragGetDirection = (xf,yf,xt,yt) ->
   if xf == xt && yf == yt
@@ -149,21 +155,22 @@ canvas.onmouseup = canvasUp
 
 redrawCanvas = ->
   if !canvas.valid
-    for element in canvasElements
-      ctx.globalAlpha = 1
-      if element.transparency > 0
-        ctx.globalAlpha = element.transparency
+    for id, element of canvasElements
+      if (typeof element is 'object')
+        ctx.globalAlpha = 1
+        if element.transparency > 0
+          ctx.globalAlpha = 1 #element.transparency
 
-      ctx.fillStyle = element.blockColor
-      element.drawOnCtx(ctx, element.canvasX, element.canvasY, element.width, element.height)
-      ctx.strokeStyle = "red";
-      ctx.strokeRect(element.canvasX, element.canvasY, element.width, element.height);
-      #debug - draw block ids
-      if element.blockType in [ BLOCK_TYPE_ICE,'two','one']
-        ctx.fillStyle = "black"
-        ctx.font = "bold 16px Arial";
-        ctx.fillText(element.x + ":" + element.y, element.canvasX + 20, element.canvasY + 30);
-        ctx.fillText(element.id+":"+element.blockType, element.canvasX + 5, element.canvasY + 50);
+        ctx.fillStyle = element.blockColor
+        element.drawOnCtx(ctx, element.canvasX, element.canvasY, element.width, element.height)
+        ctx.strokeStyle = "red";
+        ctx.strokeRect(element.canvasX, element.canvasY, element.width, element.height);
+        #debug - draw block ids
+        if element.blockType in [ BLOCK_TYPE_ICE, BLOCK_TYPE_CONTAINER]
+          ctx.fillStyle = "black"
+          ctx.font = "bold 16px Arial";
+          ctx.fillText(element.x + ":" + element.y, element.canvasX + 20, element.canvasY + 30);
+          ctx.fillText(element.id+":"+element.blockType, element.canvasX + 5, element.canvasY + 50);
     canvas.valid = true
 
 class Map
@@ -208,45 +215,51 @@ class Map
           when 'i'
             item = new IceBlock(blockCount, BLOCK_TYPE_ICE)
           when BLOCK_TYPE_HOLE
-            item = new BlockHole(blockCount, BLOCK_TYPE_HOLE)
+            item = new BlockHole()
           when '1'
-            blockType = 'one'
-            blockCount = 1
-            item = new BlockContainer(blockCount, blockType)
+            item = new BlockContainer(1, BLOCK_TYPE_ICE)
           when '2'
-            blockType = 'two'
-            blockCount = 2
-            item = new BlockContainer(blockCount, blockType)
+            item = new BlockContainer(2, BLOCK_TYPE_ICE)
+          when '3'
+            item = new BlockContainer(3, BLOCK_TYPE_ICE)
+          when '4'
+            item = new BlockContainer(4, BLOCK_TYPE_ICE)
+          when '5'
+            item = new BlockContainer(5, BLOCK_TYPE_ICE)
+          when '6'
+            item = new BlockContainer(6, BLOCK_TYPE_ICE)
           when 's'
-            item = new BlockContainer(blockCount, BLOCK_TYPE_STOPPER)
+            item = new BlockContainer(1, BLOCK_TYPE_STOPPER)
+          when 'f'
+            item = new BlockContainer(1, BLOCK_TYPE_FIRE)
           when 'u'
-            item = new DirectionBlock(blockCount, BLOCK_TYPE_DIRECTION_UP)
+            item = new DirectionBlock(BLOCK_TYPE_DIRECTION_UP)
           when 'd'
-            item = new DirectionBlock(blockCount, BLOCK_TYPE_DIRECTION_DOWN)
+            item = new DirectionBlock(BLOCK_TYPE_DIRECTION_DOWN)
           when 'l'
-            item = new DirectionBlock(blockCount, BLOCK_TYPE_DIRECTION_LEFT)
+            item = new DirectionBlock(BLOCK_TYPE_DIRECTION_LEFT)
           when 'r'
-            item = new DirectionBlock(blockCount, BLOCK_TYPE_DIRECTION_RIGHT)
+            item = new DirectionBlock(BLOCK_TYPE_DIRECTION_RIGHT)
           else
             blockType='border'
             item = new Border(blockCount, blockType)
 
         currentLevel[x]    ?= {}
-        currentLevel[x][y] = row[x]
         item.setXY(x,y)
-
-        canvasElements.push(item)
+        currentLevel[x][y]      = item
+        canvasElements[item.id] = item
 
   checkIfMapIsComplete: ->
+    return false
     for k1,v1 of currentLevel
       for k2,v2 of v1
-        if (typeof v2 == 'string' && v2 == '0')
+        if (v2.blockType == BLOCK_TYPE_HOLE)
           return false
     return true
 
   isCellAvailableForMoveOver: (y, x)->
     if (typeof currentLevel[x] == 'object')
-      if currentLevel[x][y] in [BLOCK_TYPE_HOLE, BLOCK_TYPE_ICE, BLOCK_TYPE_DIRECTION_DOWN, BLOCK_TYPE_DIRECTION_LEFT, BLOCK_TYPE_DIRECTION_RIGHT, BLOCK_TYPE_DIRECTION_UP ]
+      if currentLevel[x][y].blockType in [BLOCK_TYPE_HOLE, BLOCK_TYPE_ICE, BLOCK_TYPE_DIRECTION_DOWN, BLOCK_TYPE_DIRECTION_LEFT, BLOCK_TYPE_DIRECTION_RIGHT, BLOCK_TYPE_DIRECTION_UP ]
         return true
     return false
 
@@ -261,10 +274,10 @@ class Map
 
     if blockObj.x*BLOCK_SIZE == blockObj.canvasX &&
     blockObj.y*BLOCK_SIZE == blockObj.canvasY
-      switch currentLevel[blockObj.x][blockObj.y]
+      switch currentLevel[blockObj.x][blockObj.y].blockType
         when BLOCK_TYPE_HOLE
           blockObj.movable = false
-          currentLevel[blockObj.x][blockObj.y] = blockObj.blockType
+          currentLevel[blockObj.x][blockObj.y] = blockObj
         when BLOCK_TYPE_DIRECTION_UP
           blockObj.setDirection('up')
         when BLOCK_TYPE_DIRECTION_DOWN
@@ -273,7 +286,19 @@ class Map
           blockObj.setDirection('left')
         when BLOCK_TYPE_DIRECTION_RIGHT
           blockObj.setDirection('right')
-
+        when BLOCK_TYPE_ICE
+          if blockObj.blockType is BLOCK_TYPE_FIRE
+            console.log('FIRE OVER ICE')
+            console.debug("1" , currentLevel[blockObj.x][blockObj.y].id)
+            #currentLevel[blockObj.x][blockObj.y] = "0"
+            hole = new BlockHole(BLOCK_TYPE_HOLE)
+            hole.setXY(
+                        canvasElements[currentLevel[blockObj.x][blockObj.y].id].x,
+                        canvasElements[currentLevel[blockObj.x][blockObj.y].id].y
+                      )
+            canvasElements[currentLevel[blockObj.x][blockObj.y].id] = hole
+            #console.debug("2", canvasElements[currentLevel[blockObj.x][blockObj.y].id] )
+            #canvasElements[blockObj.x][blockObj.y] = new BlockHole(BLOCK_TYPE_HOLE)
     return true
 
 
@@ -356,7 +381,7 @@ class GenericBlock extends DrawableBlock
     moveDirection = if modifier < 0 then -1 else 1
 
     if (@nextDirectionModifier != '' )
-      if @direction == @direction_old && currentLevel[@x+moveDirection][@y] == BLOCK_TYPE_HOLE
+      if @direction == @direction_old && currentLevel[@x+moveDirection][@y].blockType == BLOCK_TYPE_HOLE
         modifier = @nextDirectionModifier
         @nextDirectionModifier = ''
       else
@@ -367,10 +392,10 @@ class GenericBlock extends DrawableBlock
     boundLeft  = @width*(  ~~(@canvasX/@width) )
     boundRight = @width*(  ~~(@canvasX/@width) + 1)
 
-    if (@canvasX + modifier) < boundLeft && currentLevel[@x+moveDirection][@y] == BLOCK_TYPE_HOLE
+    if (@canvasX + modifier) < boundLeft && currentLevel[@x+moveDirection][@y].blockType == BLOCK_TYPE_HOLE
       @nextDirectionModifier = boundLeft - @canvasX
 
-    if (@canvasX + modifier) >= boundRight && currentLevel[@x+moveDirection][@y] == BLOCK_TYPE_HOLE
+    if (@canvasX + modifier) >= boundRight && currentLevel[@x+moveDirection][@y].blockType == BLOCK_TYPE_HOLE
       @nextDirectionModifier = boundRight - @canvasX
       
     @direction_old = @direction
@@ -419,15 +444,23 @@ class IceBlock extends GenericBlock
     @blockColor = '#000077'
     @transparency = 0.3
 
+class FireBlock extends GenericBlock
+  constructor: () ->
+    super (BLOCK_TYPE_FIRE)
+    @blockColor = '#FF1111'
+    @transparency = 0.3
+
 class StopperBlock extends GenericBlock
   constructor: () ->
     super (BLOCK_TYPE_STOPPER)
     @blockColor = '#115090'
 
 class AbstractBlockContainer extends DrawableBlock
+  blockType = ''
+  blockCount = 0
   constructor: ->
-    @blockCount = 0
-    @blockType = ''
+    #@blockCount = 0
+    #@blockType = ''
     @x = 0
     @y = 0
     @id  = getUniqId()
@@ -440,31 +473,53 @@ class AbstractBlockContainer extends DrawableBlock
     @canvasX = BLOCK_SIZE * @x
     @canvasY = BLOCK_SIZE * @y
 
+#class for handling resourse stuff (gfx/snd?)
+class Resource
+  resFile = 'icons_2727347B.jpg'
+  resData = ''
+
+  constructor: (ctx) ->
+    @ctx = ctx
+    resData = new Image()
+    resData.src = resFile
+
+  drawResource: (resourceId, ctx) ->
+    sourceX = sourceY = 0
+    tileWidth = tileHeight = 64
+    console.debug()
+    ctx.drawImage(
+                   resData,
+                   sourceX+tileWidth*resourceId, sourceY,
+                   tileWidth, tileHeight,
+                   canvasElements[resourceId].canvasX, canvasElements[resourceId].canvasY,
+                   tileWidth, tileHeight
+                 )
+
 
 
 class BlockContainer extends AbstractBlockContainer
-  constructor:(blockCount, blockType) ->
+  constructor:(blockCount, blockChildType) ->
     super
     @blockCount = blockCount
-    @blockType = blockType
-    @className = 'blockContainer'
+    @blockType = BLOCK_TYPE_CONTAINER #blockType
+    @blockChildType = Helper.getBlockClassName(blockChildType)
     @blockList = []
-    @blockColor = "#a2e2a2"
+    @blockColor = "#FFF"
 
   spawnBlocks: ->
     for i in [0...@blockCount]
-      block = new IceBlock()
+      block = eval("new #{@blockChildType}()")
       block.setXY(@x, @y)
-      canvasElements.push(block)
+      canvasElements[block.id] = block
       @blockList.push(block)
     @blockCount = 0
 
     canvas.valid = false
 
 class BlockHole extends AbstractBlockContainer
-  constructor: ->
-    @className = 'blockHole'
+  constructor: () ->
     super
+    @blockType = BLOCK_TYPE_HOLE
     @blockColor = "#eeeeee"
 
 class Border extends AbstractBlockContainer
@@ -491,8 +546,20 @@ class Helper
       else
         throw {message:'lolwut?'}
 
+  @getBlockClassName: (className) ->
+    switch className
+      when BLOCK_TYPE_FIRE
+        return BLOCK_TYPE_FIRE_CLASSNAME
+      when BLOCK_TYPE_STOPPER
+        return BLOCK_TYPE_STOPPER_CLASSNAME
+      when BLOCK_TYPE_ICE
+        return BLOCK_TYPE_ICE_CLASSNAME
+
+
 level = parseInt(location.search.substr(1), 10) or 1
 map = new Map(levels[level-1])
+
+Resource = new Resource(ctx)
 
 levelPicker = document.getElementById('level')
 for i in [1..levels.length]
@@ -505,3 +572,7 @@ levelPicker.value = level
 
 levelPicker.addEventListener 'change', () ->
   location.search = '?' + levelPicker.value
+
+document.getElementById('debug').addEventListener 'click', () ->
+  Resource.drawResource(4, ctx)
+  #canvas.valid = false
