@@ -124,11 +124,13 @@ canvasUp = (e) ->
   x = e.pageX - canvas.offsetLeft
   y = e.pageY - canvas.offsetTop
   if dragGetDirection(canvas.dragX, canvas.dragY, x, y) != false
-
-    if activeElement.blockCount > 0
-      activeElement.spawnBlocks()
-      for blockElem in activeElement.blockList
-        blockElem.setDirection( dragGetDirection(canvas.dragX, canvas.dragY, x, y) )
+    neighbCellCoords =  Helper.getNeighborCellByDirection(dragGetDirection(canvas.dragX, canvas.dragY, x, y) , ~~(@dragX/BLOCK_SIZE), ~~(@dragY/BLOCK_SIZE))
+    if map.isCellAvailableForMoveOver(neighbCellCoords[1],neighbCellCoords[0]) &&
+    activeElement.blockCount > 0
+        console.log('DO move to', ~~(y/BLOCK_SIZE),~~(x/BLOCK_SIZE))
+        activeElement.spawnBlocks()
+        for blockElem in activeElement.blockList
+          blockElem.setDirection( dragGetDirection(canvas.dragX, canvas.dragY, x, y) )
 
 dragGetDirection = (xf,yf,xt,yt) ->
   if xf == xt && yf == yt
@@ -299,7 +301,6 @@ class MovableBlock
 
   updateBlockPosition: ->
     return
-
 
   moveBlock: ->
     a = @canvasX+@canvasY
@@ -472,6 +473,23 @@ class Border extends AbstractBlockContainer
     super
     @blockColor = "#000000"
 
+
+
+class Helper
+  constructor: ->
+
+  @getNeighborCellByDirection: (direction, x, y)->
+    switch direction
+      when 'left'
+        return [x-1,y]
+      when 'right'
+        return [x+1,y]
+      when 'up'
+        return [x,y-1]
+      when 'down'
+        return [x,y+1]
+      else
+        throw {message:'lolwut?'}
 
 level = parseInt(location.search.substr(1), 10) or 1
 map = new Map(levels[level-1])
