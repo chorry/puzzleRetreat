@@ -1,4 +1,4 @@
-#TODO: undo state. better opacity
+#TODO: undo state
 #Description:
 #i - ice block
 #f - fire block
@@ -9,9 +9,9 @@
 levels = [
   #test level
   [
-    "120000000"
-    "12i0i0000"
-    "1200fird0"
+    "120000000",
+    "12i0i0000",
+    "1200fird0",
     "00i060u00",
     "001i00000",
     "10011u0l0",
@@ -38,6 +38,8 @@ levels = [
     "xx1xx",
   ]
 ]
+
+undoStates = []
 
 ###
   Coffeescript mixins/multiple inheritance @https://gist.github.com/brandonedmark/2170758
@@ -66,13 +68,46 @@ class ObjectHash
   Helpers stuff
 ###
 
+`function clone(obj) {
+    // Handle the 3 simple types, and null or undefined
+    if (null == obj || "object" != typeof obj) return obj;
+
+    // Handle Date
+    if (obj instanceof Date) {
+        var copy = new Date();
+        copy.setTime(obj.getTime());
+        return copy;
+    }
+
+    // Handle Array
+    if (obj instanceof Array) {
+        var copy = [];
+        for (var i = 0, len = obj.length; i < len; i++) {
+            copy[i] = clone(obj[i]);
+        }
+        return copy;
+    }
+
+    // Handle Object
+    if (obj instanceof Object) {
+        var copy = {};
+        for (var attr in obj) {
+            if (obj.hasOwnProperty(attr)) copy[attr] = clone(obj[attr]);
+        }
+        return copy;
+    }
+
+    throw new Error("Unable to copy obj! Its type isn't supported.");
+}`
+
+
 hashCode = (string) ->
-  hash = 0;
+  hash = 0
   if (string.length == 0)
     return hash
   for i in [0...string.length]
-    char = string.charCodeAt(i);
-    hash = ((hash<<5)-hash)+char;
+    char = string.charCodeAt(i)
+    hash = ((hash<<5)-hash)+char
     hash = hash & hash
   return hash
 
@@ -83,6 +118,7 @@ TICK_SPEED = 100
 OBJECT_TTL = 3000
 currentLevel = {}
 
+BLOCK_TYPE_BORDER = 'x'
 BLOCK_TYPE_HOLE = '0'
 BLOCK_TYPE_ICE  = 'i'
 BLOCK_TYPE_STOPPER = 's'
@@ -127,6 +163,16 @@ moveObject = () ->
 
 
 canvasUp = (e) ->
+  if (activeElement.blockCount == 0 &&
+  activeElement.blockType == BLOCK_TYPE_CONTAINER
+  )
+    console.debug(undoStates)
+    #lastTime = undoStates.pop()
+    canvas.valid = false
+    #console.debug(activeElement)
+    console.log('did undo')
+
+
   x = e.pageX - canvas.offsetLeft
   y = e.pageY - canvas.offsetTop
   if dragGetDirection(canvas.dragX, canvas.dragY, x, y) != false
@@ -134,9 +180,11 @@ canvasUp = (e) ->
 
     if map.isCellAvailableForMoveOver(neighbCellCoords[1],neighbCellCoords[0]) &&
     activeElement.blockCount > 0
+      undoStates.push( clone(currentLevel) )
       activeElement.spawnBlocks()
       for blockElem in activeElement.blockList
         blockElem.setDirection( dragGetDirection(canvas.dragX, canvas.dragY, x, y) )
+
 
 dragGetDirection = (xf,yf,xt,yt) ->
   if xf == xt && yf == yt
@@ -163,19 +211,12 @@ redrawCanvas = ->
 
         ctx.fillStyle = element.blockColor
         element.drawOnCtx(ctx, element.canvasX, element.canvasY, element.width, element.height)
-        ctx.strokeStyle = "red";
-        ctx.strokeRect(element.canvasX, element.canvasY, element.width, element.height);
-        #debug - draw block ids
-        if element.blockType in [ BLOCK_TYPE_ICE, BLOCK_TYPE_CONTAINER]
-          ctx.fillStyle = "black"
-          ctx.font = "bold 16px Arial";
-          ctx.fillText(element.x + ":" + element.y, element.canvasX + 20, element.canvasY + 30);
-          ctx.fillText(element.id+":"+element.blockType, element.canvasX + 5, element.canvasY + 50);
+
     canvas.valid = true
 
 class Map
   constructor: (levelMap) ->
-    @blocks = []
+    #@blocks = []
     @listeners = {}
     @loadMap(levelMap)
     @tick()
@@ -199,12 +240,17 @@ class Map
 
   tick: =>
     @updateListeners()
-    if @checkIfMapIsComplete()
-      alert('Congratulations!')
     redrawCanvas()
+    if @checkIfMapIsComplete()
+      console.log('Congratulations!')
     setTimeout @tick, TICK_SPEED
 
   loadMap: (levelMap) ->
+    console.debug('Loading', levelMap)
+    #reset level
+    canvasElements = {}
+    currentLevel = {}
+
     @cells = for y in [0...levelMap.length]
       row = levelMap[y].split(/(?:)/)
 
@@ -216,6 +262,8 @@ class Map
             item = new IceBlock(blockCount, BLOCK_TYPE_ICE)
           when BLOCK_TYPE_HOLE
             item = new BlockHole()
+          when 'c'
+            item = new BlockContainer(0, BLOCK_TYPE_ICE)
           when '1'
             item = new BlockContainer(1, BLOCK_TYPE_ICE)
           when '2'
@@ -241,16 +289,16 @@ class Map
           when 'r'
             item = new DirectionBlock(BLOCK_TYPE_DIRECTION_RIGHT)
           else
-            blockType='border'
-            item = new Border(blockCount, blockType)
+            item = new Border(blockCount, BLOCK_TYPE_BORDER)
 
         currentLevel[x]    ?= {}
         item.setXY(x,y)
         currentLevel[x][y]      = item
         canvasElements[item.id] = item
+    console.log('LOADED')
+    canvas.valid = false
 
   checkIfMapIsComplete: ->
-    return false
     for k1,v1 of currentLevel
       for k2,v2 of v1
         if (v2.blockType == BLOCK_TYPE_HOLE)
@@ -307,6 +355,125 @@ class DrawableBlock
     ctx.beginPath()
     ctx.rect(x,y,w,h)
     ctx.closePath()
+    ctx.fill()
+
+    #todo: add nice gradient
+    gradient = ctx.createLinearGradient(x,y,w+x,y+h)
+    gradient.addColorStop(0, ctx.fillStyle)
+    gradient.addColorStop(1, ctx.fillStyle)
+    ctx.shadowBlur = 1
+    ctx.shadowColor = "black"
+    ctx.fillStyle = gradient
+    ctx.fill()
+
+    @drawSymbol(ctx,x,y,w,h)
+
+  drawSymbol: (ctx,x,y,w,h) ->
+    switch @blockType
+      when BLOCK_TYPE_ICE
+        @drawIceSymbol(ctx,x,y,w,h)
+      when BLOCK_TYPE_FIRE
+        @drawFireSymbol(ctx,x,y,w,h)
+      when BLOCK_TYPE_DIRECTION_DOWN
+        @drawDownSymbol(ctx,x,y,w,h)
+      when BLOCK_TYPE_DIRECTION_LEFT
+        @drawLeftSymbol(ctx,x,y,w,h)
+      when BLOCK_TYPE_DIRECTION_RIGHT
+        @drawRightSymbol(ctx,x,y,w,h)
+      when BLOCK_TYPE_DIRECTION_UP
+        @drawUpSymbol(ctx,x,y,w,h)
+      when BLOCK_TYPE_CONTAINER
+        @drawContainerSymbol(ctx,x,y,w,h)
+
+  drawContainerSymbol: (ctx,x,y,w,h) ->
+    if (@blockCount > 0)
+      ctx.fillStyle = "black"
+      ctx.font = "bold 16px Arial"
+      ctx.fillText(@blockCount + ":" + @blockChildType, x+w/10, y+h/2)
+    else
+      @drawUndoSymbol(ctx,x,y,w,h)
+
+  drawUndoSymbol: (ctx,x,y,w,h) ->
+    ctx.fillStyle = "black"
+    ctx.font = "bold 16px Arial"
+    ctx.fillText("UNDO",x+w/10, y+h/2)
+    return
+
+  drawIceSymbol: (ctx,x,y,w,h) ->
+    offset = ~~(w/10)
+    ctx.beginPath()
+    ctx.moveTo(x+w/2,y+offset) #top
+    ctx.lineTo(x+w-offset*2,y+h/2) #right
+    ctx.lineTo(x+w/2,y+h-offset) #bottom
+    ctx.lineTo(x+offset*2,y+h/2) #left
+    ctx.closePath()
+    ctx.shadowBlur = 0
+    gradient = ctx.createLinearGradient(x,y,w+x,y+h)
+    gradient.addColorStop(0, "#FFFFFF")
+    gradient.addColorStop(1, "#9fbae0")
+    ctx.fillStyle = gradient
+    ctx.fill()
+
+  drawFireSymbol: (ctx,x,y,w,h) ->
+    offset = ~~(w/10)
+    ctx.beginPath()
+    ctx.moveTo(x+w/2,y+offset) #top
+    ctx.lineTo(x+w-offset*2,y+h/2) #right
+    ctx.lineTo(x+w/2,y+h-offset) #bottom
+    ctx.lineTo(x+offset*2,y+h/2) #left
+    ctx.closePath()
+    gradient = ctx.createLinearGradient(x,y,w+x,y+h)
+    gradient.addColorStop(0, "#FF3333")
+    gradient.addColorStop(1, "#9f3333")
+    ctx.fillStyle = gradient
+    ctx.fill()
+  drawUpSymbol: (ctx,x,y,w,h) ->
+    offset = ~~(w/10)
+    ctx.beginPath()
+    ctx.moveTo(x+w/2,y+offset)
+    ctx.lineTo(x+w-offset,y+h-offset)
+    ctx.lineTo(x+offset,y+h-offset)
+    ctx.closePath()
+    gradient = ctx.createLinearGradient(x,y,w+x,y+h)
+    gradient.addColorStop(0, "#fff")
+    gradient.addColorStop(1, "#ccc")
+    ctx.fillStyle = gradient
+    ctx.fill()
+  drawDownSymbol: (ctx,x,y,w,h) ->
+    offset = ~~(w/10)
+    ctx.beginPath()
+    ctx.moveTo(x+offset,y+offset)
+    ctx.lineTo(x+w-offset,y+offset)
+    ctx.lineTo(x+w/2,y+h-offset) #bottom
+    ctx.closePath()
+    gradient = ctx.createLinearGradient(x,y,w+x,y+h)
+    gradient.addColorStop(0, "#FF3333")
+    gradient.addColorStop(1, "#9f3333")
+    ctx.fillStyle = gradient
+    ctx.fill()
+  drawLeftSymbol: (ctx,x,y,w,h) ->
+    offset = ~~(w/10)
+    ctx.beginPath()
+    ctx.moveTo(x+offset,y+h/2)
+    ctx.lineTo(x+w-offset,y+offset)
+    ctx.lineTo(x+w-offset,y+h-offset)
+    ctx.closePath()
+    gradient = ctx.createLinearGradient(x,y,w+x,y+h)
+    gradient.addColorStop(0, "#FF3333")
+    gradient.addColorStop(1, "#9f3333")
+    ctx.fillStyle = gradient
+    ctx.fill()
+  drawRightSymbol: (ctx,x,y,w,h) ->
+    offset = ~~(w/10)
+    ctx.beginPath()
+    ctx.moveTo(x+offset,y+offset)
+    ctx.lineTo(x+w-offset,y+h/2)
+    ctx.lineTo(x+offset,y+h-offset)
+    ctx.closePath()
+    gradient = ctx.createLinearGradient(x,y,w+x,y+h)
+    gradient.addColorStop(0, "#FF3333")
+    gradient.addColorStop(1, "#9f3333")
+    ctx.fillStyle = gradient
     ctx.fill()
 
 #MIXIN CLASS
@@ -473,30 +640,6 @@ class AbstractBlockContainer extends DrawableBlock
     @canvasX = BLOCK_SIZE * @x
     @canvasY = BLOCK_SIZE * @y
 
-#class for handling resourse stuff (gfx/snd?)
-class Resource
-  resFile = 'icons_2727347B.jpg'
-  resData = ''
-
-  constructor: (ctx) ->
-    @ctx = ctx
-    resData = new Image()
-    resData.src = resFile
-
-  drawResource: (resourceId, ctx) ->
-    sourceX = sourceY = 0
-    tileWidth = tileHeight = 64
-    console.debug()
-    ctx.drawImage(
-                   resData,
-                   sourceX+tileWidth*resourceId, sourceY,
-                   tileWidth, tileHeight,
-                   canvasElements[resourceId].canvasX, canvasElements[resourceId].canvasY,
-                   tileWidth, tileHeight
-                 )
-
-
-
 class BlockContainer extends AbstractBlockContainer
   constructor:(blockCount, blockChildType) ->
     super
@@ -526,6 +669,7 @@ class Border extends AbstractBlockContainer
   constructor: () ->
     @className  = 'border'
     super
+    @blockType = BLOCK_TYPE_BORDER
     @blockColor = "#000000"
 
 
@@ -559,13 +703,11 @@ class Helper
 level = parseInt(location.search.substr(1), 10) or 1
 map = new Map(levels[level-1])
 
-Resource = new Resource(ctx)
-
 levelPicker = document.getElementById('level')
 for i in [1..levels.length]
   option = document.createElement('option')
   option.value = i
-  option.appendChild(document.createTextNode("Level #{i}"));
+  option.appendChild(document.createTextNode("Level #{i}"))
   levelPicker.appendChild(option)
 
 levelPicker.value = level
@@ -573,6 +715,31 @@ levelPicker.value = level
 levelPicker.addEventListener 'change', () ->
   location.search = '?' + levelPicker.value
 
+mapState = []
+document.getElementById('reset').addEventListener 'click', () ->
+  mapState = dumpMapState()
+
 document.getElementById('debug').addEventListener 'click', () ->
-  Resource.drawResource(4, ctx)
-  #canvas.valid = false
+  #loadMapState(mapState)
+  #console.debug(mapState)
+  map.loadMap( mapState )
+  console.log('map load')
+
+
+
+
+dumpMapState = () ->
+  mapState = []
+  for k,v1 of currentLevel
+    if typeof v1 == 'object'
+      for j,v2 of v1
+        if typeof v2 == 'object'
+          mapState[j] ?= ''
+          switch v2.blockType
+            when BLOCK_TYPE_CONTAINER
+              mapState[j] += if v2.blockCount > 0 then v2.blockCount else v2.blockType
+            else
+              mapState[j] += v2.blockType
+
+  console.debug(mapState)
+  return mapState
