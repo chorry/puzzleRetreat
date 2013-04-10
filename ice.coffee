@@ -1,40 +1,44 @@
 #TODO: undo state
 #Description:
 #i - ice block
-#f - fire block
 #0 - hole
 #1-6 - block containers
+#S - stopper container
+#s - stopper block
+#F - fire container
+#f - fireblock
+
 #u,d,l,r - block changes direction
 
 levels = [
   #test level
   [
-    "120000000",
-    "12i0i0000",
-    "1200fird0",
-    "00i060u00",
-    "001i00000",
-    "10011u0l0",
+    "12ooooooo",
+    "12ioioooo",
+    "12ooFirdo",
+    "ooio6ouoo",
+    "oo1iooooo",
+    "1oo11uolo",
   ],
   #test level
   [
     "xx1xx",
-    "x100x",
-    "x10xx"
+    "x1oox",
+    "x1oxx"
   ],
   #Morning: level 1
   [
    "x112x",
-   "2000x",
-   "x0001",
-   "10001"
+   "2ooox",
+   "xooo1",
+   "1ooo1"
   ],
   #Morning #2
   [
-    "xxs1x",
-    "xd002",
-    "x000x",
-    "200ux",
+    "xxS1x",
+    "xdoo2",
+    "xooox",
+    "2ooux",
     "xx1xx",
   ]
 ]
@@ -119,11 +123,14 @@ OBJECT_TTL = 3000
 currentLevel = {}
 
 BLOCK_TYPE_BORDER = 'x'
-BLOCK_TYPE_HOLE = '0'
+BLOCK_TYPE_HOLE = 'o'
 BLOCK_TYPE_ICE  = 'i'
 BLOCK_TYPE_STOPPER = 's'
 BLOCK_TYPE_FIRE = 'f'
-BLOCK_TYPE_CONTAINER = 'c' #not used as descriptor on map
+BLOCK_TYPE_CONTAINER = 'c'
+BLOCK_TYPE_CONTAINER_ICE  = 'I' #not used as descriptor on map
+BLOCK_TYPE_CONTAINER_FIRE = 'F' #not used as descriptor on map
+BLOCK_TYPE_CONTAINER_STOP = 'S' #not used as descriptor on map
 BLOCK_TYPE_ICE_CLASSNAME = 'IceBlock'
 BLOCK_TYPE_STOPPER_CLASSNAME = 'StopperBlock'
 BLOCK_TYPE_FIRE_CLASSNAME = 'FireBlock'
@@ -158,19 +165,14 @@ uniqueObjectId = 0
 getUniqId = ->
   uniqueObjectId += 1
 
-
-moveObject = () ->
-
-
 canvasUp = (e) ->
   if (activeElement.blockCount == 0 &&
-  activeElement.blockType == BLOCK_TYPE_CONTAINER
+  activeElement.blockType == BLOCK_TYPE_CONTAINER &&
+  undoStates.length > 0
   )
-    console.debug(undoStates)
-    #lastTime = undoStates.pop()
+    lastTime = undoStates.pop()
+    map.loadMap(lastTime)
     canvas.valid = false
-    #console.debug(activeElement)
-    console.log('did undo')
 
 
   x = e.pageX - canvas.offsetLeft
@@ -180,7 +182,7 @@ canvasUp = (e) ->
 
     if map.isCellAvailableForMoveOver(neighbCellCoords[1],neighbCellCoords[0]) &&
     activeElement.blockCount > 0
-      undoStates.push( clone(currentLevel) )
+      undoStates.push( dumpMapState() )
       activeElement.spawnBlocks()
       for blockElem in activeElement.blockList
         blockElem.setDirection( dragGetDirection(canvas.dragX, canvas.dragY, x, y) )
@@ -210,7 +212,8 @@ redrawCanvas = ->
           ctx.globalAlpha = 1 #element.transparency
 
         ctx.fillStyle = element.blockColor
-        element.drawOnCtx(ctx, element.canvasX, element.canvasY, element.width, element.height)
+        if (typeof element  == 'object')
+          element.drawOnCtx(ctx, element.canvasX, element.canvasY, element.width, element.height)
 
     canvas.valid = true
 
@@ -246,7 +249,6 @@ class Map
     setTimeout @tick, TICK_SPEED
 
   loadMap: (levelMap) ->
-    console.debug('Loading', levelMap)
     #reset level
     canvasElements = {}
     currentLevel = {}
@@ -258,35 +260,39 @@ class Map
         blockCount = -1
 
         switch row[x]
-          when 'i'
+          when BLOCK_TYPE_ICE
             item = new IceBlock(blockCount, BLOCK_TYPE_ICE)
           when BLOCK_TYPE_HOLE
             item = new BlockHole()
-          when 'c'
-            item = new BlockContainer(0, BLOCK_TYPE_ICE)
+          when BLOCK_TYPE_FIRE
+            item = new FireBlock(blockCount, BLOCK_TYPE_FIRE)
+          when BLOCK_TYPE_STOPPER
+            item = new StopperBlock(blockCount, BLOCK_TYPE_STOPPER)
+          when '0'
+            item = new BlockContainer(0, BLOCK_TYPE_CONTAINER_ICE, BLOCK_TYPE_ICE)
           when '1'
-            item = new BlockContainer(1, BLOCK_TYPE_ICE)
+            item = new BlockContainer(1, BLOCK_TYPE_CONTAINER_ICE, BLOCK_TYPE_ICE)
           when '2'
-            item = new BlockContainer(2, BLOCK_TYPE_ICE)
+            item = new BlockContainer(2, BLOCK_TYPE_CONTAINER_ICE, BLOCK_TYPE_ICE)
           when '3'
-            item = new BlockContainer(3, BLOCK_TYPE_ICE)
+            item = new BlockContainer(3, BLOCK_TYPE_CONTAINER_ICE, BLOCK_TYPE_ICE)
           when '4'
-            item = new BlockContainer(4, BLOCK_TYPE_ICE)
+            item = new BlockContainer(4, BLOCK_TYPE_CONTAINER_ICE, BLOCK_TYPE_ICE)
           when '5'
-            item = new BlockContainer(5, BLOCK_TYPE_ICE)
+            item = new BlockContainer(5, BLOCK_TYPE_CONTAINER_ICE, BLOCK_TYPE_ICE)
           when '6'
-            item = new BlockContainer(6, BLOCK_TYPE_ICE)
-          when 's'
-            item = new BlockContainer(1, BLOCK_TYPE_STOPPER)
-          when 'f'
-            item = new BlockContainer(1, BLOCK_TYPE_FIRE)
-          when 'u'
+            item = new BlockContainer(6, BLOCK_TYPE_CONTAINER_ICE, BLOCK_TYPE_ICE)
+          when BLOCK_TYPE_CONTAINER_STOP
+            item = new BlockContainer(1, BLOCK_TYPE_CONTAINER_STOP, BLOCK_TYPE_STOPPER)
+          when BLOCK_TYPE_CONTAINER_FIRE
+            item = new BlockContainer(1, BLOCK_TYPE_CONTAINER_FIRE, BLOCK_TYPE_FIRE)
+          when BLOCK_TYPE_DIRECTION_UP
             item = new DirectionBlock(BLOCK_TYPE_DIRECTION_UP)
-          when 'd'
+          when BLOCK_TYPE_DIRECTION_DOWN
             item = new DirectionBlock(BLOCK_TYPE_DIRECTION_DOWN)
-          when 'l'
+          when BLOCK_TYPE_DIRECTION_LEFT
             item = new DirectionBlock(BLOCK_TYPE_DIRECTION_LEFT)
-          when 'r'
+          when BLOCK_TYPE_DIRECTION_RIGHT
             item = new DirectionBlock(BLOCK_TYPE_DIRECTION_RIGHT)
           else
             item = new Border(blockCount, BLOCK_TYPE_BORDER)
@@ -295,7 +301,6 @@ class Map
         item.setXY(x,y)
         currentLevel[x][y]      = item
         canvasElements[item.id] = item
-    console.log('LOADED')
     canvas.valid = false
 
   checkIfMapIsComplete: ->
@@ -336,17 +341,12 @@ class Map
           blockObj.setDirection('right')
         when BLOCK_TYPE_ICE
           if blockObj.blockType is BLOCK_TYPE_FIRE
-            console.log('FIRE OVER ICE')
-            console.debug("1" , currentLevel[blockObj.x][blockObj.y].id)
-            #currentLevel[blockObj.x][blockObj.y] = "0"
             hole = new BlockHole(BLOCK_TYPE_HOLE)
             hole.setXY(
                         canvasElements[currentLevel[blockObj.x][blockObj.y].id].x,
                         canvasElements[currentLevel[blockObj.x][blockObj.y].id].y
                       )
             canvasElements[currentLevel[blockObj.x][blockObj.y].id] = hole
-            #console.debug("2", canvasElements[currentLevel[blockObj.x][blockObj.y].id] )
-            #canvasElements[blockObj.x][blockObj.y] = new BlockHole(BLOCK_TYPE_HOLE)
     return true
 
 
@@ -641,17 +641,17 @@ class AbstractBlockContainer extends DrawableBlock
     @canvasY = BLOCK_SIZE * @y
 
 class BlockContainer extends AbstractBlockContainer
-  constructor:(blockCount, blockChildType) ->
+  constructor:(blockCount, @blockContainerType, @blockChildType) ->
     super
     @blockCount = blockCount
     @blockType = BLOCK_TYPE_CONTAINER #blockType
-    @blockChildType = Helper.getBlockClassName(blockChildType)
+    @blockChildTypeClass = Helper.getBlockClassName(blockChildType)
     @blockList = []
     @blockColor = "#FFF"
 
   spawnBlocks: ->
     for i in [0...@blockCount]
-      block = eval("new #{@blockChildType}()")
+      block = eval("new #{@blockChildTypeClass}()")
       block.setXY(@x, @y)
       canvasElements[block.id] = block
       @blockList.push(block)
@@ -720,10 +720,7 @@ document.getElementById('reset').addEventListener 'click', () ->
   mapState = dumpMapState()
 
 document.getElementById('debug').addEventListener 'click', () ->
-  #loadMapState(mapState)
-  #console.debug(mapState)
   map.loadMap( mapState )
-  console.log('map load')
 
 
 
@@ -732,14 +729,18 @@ dumpMapState = () ->
   mapState = []
   for k,v1 of currentLevel
     if typeof v1 == 'object'
+      tmp = ''
       for j,v2 of v1
         if typeof v2 == 'object'
           mapState[j] ?= ''
           switch v2.blockType
             when BLOCK_TYPE_CONTAINER
-              mapState[j] += if v2.blockCount > 0 then v2.blockCount else v2.blockType
+              if v2.blockContainerType == BLOCK_TYPE_CONTAINER_ICE
+                mapState[j] += v2.blockCount
+              else if v2.blockCount > 0 && v2.blockChildType
+                mapState[j] += v2.blockContainerType
+              else
+                mapState[j] += v2.blockContainerType
             else
               mapState[j] += v2.blockType
-
-  console.debug(mapState)
   return mapState
